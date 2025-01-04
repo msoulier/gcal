@@ -3,43 +3,43 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"flag"
 	"fmt"
 	"net/http"
 	"os"
 	"time"
-    "flag"
-    "errors"
 
+	"github.com/op/go-logging"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
 	"google.golang.org/api/calendar/v3"
 	"google.golang.org/api/option"
-    "github.com/op/go-logging"
 )
 
 var (
-    log   *logging.Logger = nil
-    debug bool = false
-    duration string
+	log      *logging.Logger = nil
+	debug    bool            = false
+	duration string
 )
 
 func init() {
-    flag.BoolVar(&debug, "debug", false, "Debug logging")
-    flag.StringVar(&duration, "duration", "1d", "Duration from now to check (1d|1w)")
-    flag.Parse()
-    format := logging.MustStringFormatter(
-        `%{time:2006-01-02 15:04:05.000-0700} %{level} [%{shortfile}] %{message}`,
-    )
-    stderrBackend := logging.NewLogBackend(os.Stderr, "", 0)
-    stderrFormatter := logging.NewBackendFormatter(stderrBackend, format)
-    stderrBackendLevelled := logging.AddModuleLevel(stderrFormatter)
-    logging.SetBackend(stderrBackendLevelled)
-    if debug {
-        stderrBackendLevelled.SetLevel(logging.DEBUG, "gcal")
-    } else {
-        stderrBackendLevelled.SetLevel(logging.INFO, "gcal")
-    }
-    log = logging.MustGetLogger("gcal")
+	flag.BoolVar(&debug, "debug", false, "Debug logging")
+	flag.StringVar(&duration, "duration", "1d", "Duration from now to check (1d|1w)")
+	flag.Parse()
+	format := logging.MustStringFormatter(
+		`%{time:2006-01-02 15:04:05.000-0700} %{level} [%{shortfile}] %{message}`,
+	)
+	stderrBackend := logging.NewLogBackend(os.Stderr, "", 0)
+	stderrFormatter := logging.NewBackendFormatter(stderrBackend, format)
+	stderrBackendLevelled := logging.AddModuleLevel(stderrFormatter)
+	logging.SetBackend(stderrBackendLevelled)
+	if debug {
+		stderrBackendLevelled.SetLevel(logging.DEBUG, "gcal")
+	} else {
+		stderrBackendLevelled.SetLevel(logging.INFO, "gcal")
+	}
+	log = logging.MustGetLogger("gcal")
 }
 
 // Retrieve a token, saves the token, then returns the generated client.
@@ -98,50 +98,50 @@ func saveToken(path string, token *oauth2.Token) {
 }
 
 func getEvents(srv *calendar.Service, calid, caldesc string) ([]*calendar.Event, error) {
-    events2return := make([]*calendar.Event, 0)
+	events2return := make([]*calendar.Event, 0)
 	now := time.Now().Local()
-    midnight_today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.Local).
-        Format(time.RFC3339)
-    midnight_tomorrow := time.Date(now.Year(), now.Month(), now.Day()+1, 0, 0, 0, 0, time.Local).
-        Format(time.RFC3339)
-    midnight_oneweek := time.Date(now.Year(), now.Month(), now.Day()+7, 0, 0, 0, 0, time.Local).
-        Format(time.RFC3339)
+	midnight_today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.Local).
+		Format(time.RFC3339)
+	midnight_tomorrow := time.Date(now.Year(), now.Month(), now.Day()+1, 0, 0, 0, 0, time.Local).
+		Format(time.RFC3339)
+	midnight_oneweek := time.Date(now.Year(), now.Month(), now.Day()+7, 0, 0, 0, 0, time.Local).
+		Format(time.RFC3339)
 
-    endtime := midnight_tomorrow
-    if duration == "1w" {
-        endtime = midnight_oneweek
-    } else if duration != "1d" {
-        log.Errorf("Invalid duration: %s", duration)
-        return events2return, errors.New("Invalid duration")
-    }
+	endtime := midnight_tomorrow
+	if duration == "1w" {
+		endtime = midnight_oneweek
+	} else if duration != "1d" {
+		log.Errorf("Invalid duration: %s", duration)
+		return events2return, errors.New("Invalid duration")
+	}
 
-    log.Debugf("Querying calendar %s for events from %s to %s\n", calid, midnight_today, midnight_tomorrow)
+	log.Debugf("Querying calendar %s for events from %s to %s\n", calid, midnight_today, midnight_tomorrow)
 	events, err := srv.Events.List(calid).ShowDeleted(false).
 		SingleEvents(true).TimeMin(midnight_today).TimeMax(endtime).OrderBy("startTime").Do()
 	if err != nil {
 		log.Fatalf("Unable to retrieve today's events from calendar %s: %v", calid, err)
-        return events2return, err
+		return events2return, err
 	}
-    if caldesc == "" {
-        log.Debug("calendar description is empty, using calendar id")
-        caldesc = calid
-    }
+	if caldesc == "" {
+		log.Debug("calendar description is empty, using calendar id")
+		caldesc = calid
+	}
 	log.Debugf("Upcoming events from calendar, duration %s, \"%s\":", duration, caldesc)
 	if len(events.Items) == 0 {
 		log.Debug("No upcoming events found.")
 	} else {
-        log.Debugf("Found %d events", len(events.Items))
-        events2return = events.Items
+		log.Debugf("Found %d events", len(events.Items))
+		events2return = events.Items
 	}
-    return events2return, nil
+	return events2return, nil
 }
 
 func getCalendarList(srv *calendar.Service) (*calendar.CalendarList, error) {
-    calendar_list, err := srv.CalendarList.List().Do()
-    if err != nil {
-        return nil, err
-    }
-    return calendar_list, nil
+	calendar_list, err := srv.CalendarList.List().Do()
+	if err != nil {
+		return nil, err
+	}
+	return calendar_list, nil
 }
 
 func main() {
@@ -163,23 +163,23 @@ func main() {
 		log.Fatalf("Unable to retrieve Calendar client: %v", err)
 	}
 
-    calendar_list, err := getCalendarList(srv)
-    if err != nil {
-        panic(err)
-    }
-    for _, item := range calendar_list.Items {
-        events, err := getEvents(srv, item.Id, item.Description)
-        if err != nil {
-            log.Errorf("%s", err)
-            os.Exit(1)
-        }
+	calendar_list, err := getCalendarList(srv)
+	if err != nil {
+		panic(err)
+	}
+	for _, item := range calendar_list.Items {
+		events, err := getEvents(srv, item.Id, item.Description)
+		if err != nil {
+			log.Errorf("%s", err)
+			os.Exit(1)
+		}
 		for _, item := range events {
 			date := item.Start.DateTime
 			if date == "" {
 				date = item.Start.Date
 			}
-            fmt.Printf("%25s %-55s\n", date, item.Summary)
+			fmt.Printf("%25s %-55s\n", date, item.Summary)
 		}
-    }
-    os.Exit(0)
+	}
+	os.Exit(0)
 }

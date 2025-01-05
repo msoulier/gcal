@@ -25,7 +25,7 @@ var (
 
 func init() {
 	flag.BoolVar(&debug, "debug", false, "Debug logging")
-	flag.StringVar(&duration, "duration", "1d", "Duration from now to check (1d|1w)")
+	flag.StringVar(&duration, "duration", "1d", "Duration from now to check (1d|1w|1m)")
 	flag.Parse()
 	format := logging.MustStringFormatter(
 		`%{time:2006-01-02 15:04:05.000-0700} %{level} [%{shortfile}] %{message}`,
@@ -106,10 +106,14 @@ func getEvents(srv *calendar.Service, calid, caldesc string) ([]*calendar.Event,
 		Format(time.RFC3339)
 	midnight_oneweek := time.Date(now.Year(), now.Month(), now.Day()+7, 0, 0, 0, 0, time.Local).
 		Format(time.RFC3339)
+	midnight_onemonth := time.Date(now.Year(), now.Month()+1, now.Day(), 0, 0, 0, 0, time.Local).
+		Format(time.RFC3339)
 
 	endtime := midnight_tomorrow
 	if duration == "1w" {
 		endtime = midnight_oneweek
+	} else if duration == "1m" {
+		endtime = midnight_onemonth
 	} else if duration != "1d" {
 		log.Errorf("Invalid duration: %s", duration)
 		return events2return, errors.New("Invalid duration")
@@ -175,10 +179,24 @@ func main() {
 		}
 		for _, item := range events {
 			date := item.Start.DateTime
+			var start time.Time
+			var err error
 			if date == "" {
+				// 2025-01-05
 				date = item.Start.Date
+				start, err = time.Parse("2006-01-02", date)
+				if err != nil {
+					panic(err)
+				}
+			} else {
+				// 2025-01-05T10:00:00-05:00
+				start, err = time.Parse(time.RFC3339, date)
+				if err != nil {
+					panic(err)
+				}
 			}
-			fmt.Printf("%25s %-55s\n", date, item.Summary)
+			fmt.Printf("REM %s AT %02d:%02d MSG %%\"%s%%\" %%b, %%2\n",
+				start.Format("Jan 02"), start.Hour(), start.Minute(), item.Summary)
 		}
 	}
 	os.Exit(0)

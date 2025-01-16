@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/op/go-logging"
@@ -21,11 +22,13 @@ var (
 	log      *logging.Logger = nil
 	debug    bool            = false
 	duration string
+	format   string
 )
 
 func init() {
 	flag.BoolVar(&debug, "debug", false, "Debug logging")
 	flag.StringVar(&duration, "duration", "1d", "Duration from now to check (1d|1w|1m)")
+	flag.StringVar(&format, "format", "remind", "output format (remind|org)")
 	flag.Parse()
 	format := logging.MustStringFormatter(
 		`%{time:2006-01-02 15:04:05.000-0700} %{level} [%{shortfile}] %{message}`,
@@ -171,8 +174,12 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
+	if format == "org" {
+		fmt.Println("# -*- mode: org -*-")
+	}
 	for _, item := range calendar_list.Items {
 		events, err := getEvents(srv, item.Id, item.Description)
+		calname := strings.TrimSpace(item.Description)
 		if err != nil {
 			log.Errorf("%s", err)
 			os.Exit(1)
@@ -195,8 +202,21 @@ func main() {
 					panic(err)
 				}
 			}
-			fmt.Printf("REM %s AT %02d:%02d MSG %%\"%s%%\" %%b, %%2\n",
-				start.Format("Jan 02"), start.Hour(), start.Minute(), item.Summary)
+			summary := strings.TrimSpace(item.Summary)
+			if format == "remind" {
+				fmt.Printf("REM %s AT %02d:%02d MSG %%\"%s%%\" %%b, %%2\n",
+					start.Format("Jan 02"), start.Hour(), start.Minute(), summary)
+			} else if format == "org" {
+				_, week := start.ISOWeek()
+				fmt.Printf("* %s <%s>\n", summary, start.Format("2006-01-02 Mon 15:04:05"))
+				fmt.Printf("  #+PROPERTY: week=%d\n", week)
+				// Add a property with the calendar name
+				if calname != "" {
+					fmt.Printf("  #+PROPERTY: calendar=%s\n", calname)
+				}
+			} else {
+				panic("unsupported format")
+			}
 		}
 	}
 	os.Exit(0)

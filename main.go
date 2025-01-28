@@ -23,13 +23,21 @@ var (
 	debug    bool            = false
 	duration string
 	format   string
+	emptycal bool
 )
 
 func init() {
 	flag.BoolVar(&debug, "debug", false, "Debug logging")
+	flag.BoolVar(&emptycal, "emptycal", false, "Include empty calendar names (false)")
 	flag.StringVar(&duration, "duration", "1d", "Duration from now to check (1d|1w|1m)")
-	flag.StringVar(&format, "format", "remind", "output format (remind|org)")
+	flag.StringVar(&format, "format", "", "output format (remind|org)")
 	flag.Parse()
+
+	if format == "" {
+		flag.PrintDefaults()
+		os.Exit(1)
+	}
+
 	format := logging.MustStringFormatter(
 		`%{time:2006-01-02 15:04:05.000-0700} %{level} [%{shortfile}] %{message}`,
 	)
@@ -180,6 +188,9 @@ func main() {
 	for _, item := range calendar_list.Items {
 		events, err := getEvents(srv, item.Id, item.Description)
 		calname := strings.TrimSpace(item.Description)
+		if calname == "" && !emptycal {
+			continue
+		}
 		if err != nil {
 			log.Errorf("%s", err)
 			os.Exit(1)

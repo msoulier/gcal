@@ -185,6 +185,11 @@ func main() {
 	if format == "org" {
 		fmt.Println("# -*- mode: org -*-")
 	}
+	// Our local timezone
+	localzone, err := time.LoadLocation("America/Montreal")
+	if err != nil {
+		panic(err)
+	}
 	for _, item := range calendar_list.Items {
 		events, err := getEvents(srv, item.Id, item.Description)
 		calname := strings.TrimSpace(item.Description)
@@ -196,9 +201,12 @@ func main() {
 			os.Exit(1)
 		}
 		for _, item := range events {
-			date := item.Start.DateTime
-			var start time.Time
 			var err error
+			date := item.Start.DateTime
+			if err != nil {
+				panic(err)
+			}
+			var start time.Time
 			if date == "" {
 				// 2025-01-05
 				date = item.Start.Date
@@ -213,13 +221,15 @@ func main() {
 					panic(err)
 				}
 			}
+			// Convert to localtime.
+			local_start := start.In(localzone)
 			summary := strings.TrimSpace(item.Summary)
 			if format == "remind" {
 				fmt.Printf("REM %s AT %02d:%02d MSG %%\"%s%%\" %%b, %%2\n",
-					start.Format("Jan 02"), start.Hour(), start.Minute(), summary)
+					local_start.Format("Jan 02"), local_start.Hour(), local_start.Minute(), summary)
 			} else if format == "org" {
-				_, week := start.ISOWeek()
-				fmt.Printf("* %s <%s>\n", summary, start.Format("2006-01-02 Mon 15:04:05"))
+				_, week := local_start.ISOWeek()
+				fmt.Printf("* %s <%s>\n", summary, local_start.Format("2006-01-02 Mon 15:04:05"))
 				fmt.Printf("  #+PROPERTY: week=%d\n", week)
 				// Add a property with the calendar name
 				if calname != "" {
